@@ -4,6 +4,9 @@ conn = sqlite3.connect("database.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("DROP TABLE IF EXISTS users")
+cursor.execute("DROP TABLE IF EXISTS cards")
+cursor.execute("DROP TABLE IF EXISTS shared_cards")
+cursor.execute("DROP TABLE IF EXISTS card_permissions")
 cursor.execute("""
     CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
