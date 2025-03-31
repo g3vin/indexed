@@ -33,14 +33,14 @@ export const shareCard = async (cardId, username, permission = "view") => {
 };
 
 export const deleteCard = async (cardId, userId) => {
-    console.log("Deleting card with userId:", userId);  // Debugging line
     try {
-      const response = await axios.delete(`${API_URL}/cards/${cardId}/`, { 
-        params: { user_id: userId } 
-      });
-      return response.data;
+        const response = await axios.delete(`http://127.0.0.1:8000/cards/${cardId}/`, {
+            data: { user_id: userId },  // Send user_id in the request body
+            withCredentials: true,
+        });
+        return response;
     } catch (error) {
-      console.error("Error deleting card:", error.response?.data || error.message);
-      throw error.response?.data || error;
+        console.error("API error deleting card:", error);
+        throw error;
     }
 };

@@ -5,6 +5,8 @@ import sqlite3
 import bcrypt
 import jwt
 import datetime
+from fastapi import Request
+from fastapi import Body
 
 SECRET_KEY = "your_secret_key"  # Change this to a secure key
 
@@ -13,7 +15,7 @@ app = FastAPI()
 # Enable CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Vite frontend
+    allow_origins=["http://localhost:5173"],  # Vite frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -156,7 +158,7 @@ def login(user: UserLogin):
 
 @app.get("/users/{user_id}/cards/")
 def get_user_cards(user_id: int):
-    conn = sqlite3.connect("database.db")  # Create a new connection
+    conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
 
     query = """
@@ -200,13 +202,10 @@ def share_card(card_id: int, share_data: dict):
 
     return {"message": "Card shared successfully", "permission": permission}
 
-from fastapi import Request
-
-from fastapi import Request
-
 @app.delete("/cards/{card_id}/")
-def delete_card(card_id: int, request: Request):
-    user_id = request.query_params.get("user_id")
+async def delete_card(card_id: int, request: Request):
+    data = await request.json()  # Read the JSON body
+    user_id = data.get("user_id")  # Extract user_id
     print(f"Received user_id: {user_id}")  # Debugging line
 
     if not user_id:
@@ -225,7 +224,7 @@ def delete_card(card_id: int, request: Request):
     print(f"Card owner_id: {owner_id}")  # Debugging line
 
     if owner_id != user_id:
-        raise HTTPException(status_code=403, detail="You are not the owner of this card")
+        raise HTTPException(status_code=403, detail="You are not the owner and cannot delete this card")
 
     # Delete the card
     cursor.execute("DELETE FROM cards WHERE id = ?", (card_id,))
@@ -234,18 +233,15 @@ def delete_card(card_id: int, request: Request):
 
     return {"message": "Card deleted successfully"}
 
-
-
-
 @app.get("/cards/{card_id}/")
 def get_card(card_id: int):
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
 
+    # Fetch card details
     query = """
-        SELECT c.id, c.text, c.color, cp.permission
+        SELECT c.id, c.text, c.color, c.owner_id
         FROM cards c
-        JOIN card_permissions cp ON c.id = cp.card_id
         WHERE c.id = ?
     """
     cursor.execute(query, (card_id,))
@@ -255,12 +251,16 @@ def get_card(card_id: int):
         conn.close()
         raise HTTPException(status_code=404, detail="Card not found")
 
-    card_data = {"id": card[0], "text": card[1], "color": card[2], "permission": card[3]}
+    # Return ownership information
+    card_data = {
+        "id": card[0],
+        "text": card[1],
+        "color": card[2],
+        "owner_id": card[3],  # ✅ Ensure this is included
+    }
     
     conn.close()
     return card_data
-
-from fastapi import Body
 
 @app.put("/cards/{card_id}/")
 def update_card(card_id: int, text: str = Body(...), color: str = Body(...)):

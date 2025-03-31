@@ -3,8 +3,7 @@
     height: 170px;
     border-radius: 10px;
     padding: 10px;
-    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
+    box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.1);
     cursor: pointer;
     display: flex;
     flex-direction: column;
@@ -18,7 +17,7 @@
     height: 100%;
     border: none;
     resize: none;
-    font-size: 16px;
+    font-size: 14px;
     background: transparent;
     outline: none;
     pointer-events: none;
@@ -39,6 +38,7 @@
     box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.2);
     background-color: white;
     padding: 20px;
+    transition: all 0.3s ease;
 }
 
 .index-card input[type="color"],
@@ -70,7 +70,7 @@
     border-radius: 5px;
 }
 
-.share-section button {
+.share-button{
     padding: 5px;
     background: #007bff;
     color: white;
@@ -79,7 +79,7 @@
     cursor: pointer;
 }
 
-.share-section button:hover {
+.share-button:hover {
     background: #0056b3;
 }
 
