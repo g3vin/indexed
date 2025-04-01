@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 import sqlite3
@@ -7,25 +7,39 @@ import jwt
 import datetime
 from fastapi import Request
 from fastapi import Body
+from typing import List
 
-SECRET_KEY = "your_secret_key"  # Change this to a secure key
+SECRET_KEY = "your_secret_key"
 
 app = FastAPI()
 
-# Enable CORS for frontend communication
+active_connections: List[WebSocket] = []
+
+@app.websocket("/ws/card/{card_id}")
+async def websocket_endpoint(websocket: WebSocket, card_id: int):
+    await websocket.accept()
+    active_connections.append(websocket)
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+
+            for connection in active_connections:
+                await connection.send_text(f"Card {card_id} updated: {data}")
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite frontend
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize database connection
 conn = sqlite3.connect("database.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# Create users table
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +52,6 @@ cursor.execute("""
 """)
 conn.commit()
 
-# Create cards table
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS cards (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,7 +62,6 @@ cursor.execute("""
 """)
 conn.commit()
 
-# Create card_permissions table (replacing shared_cards)
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS card_permissions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,9 +75,8 @@ cursor.execute("""
 """)
 conn.commit()
 
-# Pydantic models
 class CardCreate(BaseModel):
-    owner_id: int  # Must be a valid integer
+    owner_id: int
     text: str = "New Card"
     color: str = "#ffffff"
 
@@ -91,7 +102,6 @@ def create_card(card: CardCreate):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error inserting card permission: {e}")
 
-    # Return permission in the response so front-end knows this card is owned by the user.
     return {"id": card_id, "text": card.text, "color": card.color, "permission": "owner"}
 
 class UserRegister(BaseModel):
@@ -173,7 +183,7 @@ def get_user_cards(user_id: int):
         for row in cursor.fetchall()
     ]
 
-    conn.close()  # Close the connection after the request
+    conn.close()
     return cards
 
 
@@ -181,9 +191,8 @@ def get_user_cards(user_id: int):
 @app.post("/cards/{card_id}/share/")
 def share_card(card_id: int, share_data: dict):
     username = share_data.get("username")
-    permission = share_data.get("permission", "view")  # default permission is "view"
+    permission = share_data.get("permission", "view")
 
-    # Get user ID from username
     cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
     user = cursor.fetchone()
     if not user:
@@ -204,15 +213,15 @@ def share_card(card_id: int, share_data: dict):
 
 @app.delete("/cards/{card_id}/")
 async def delete_card(card_id: int, request: Request):
-    data = await request.json()  # Read the JSON body
-    user_id = data.get("user_id")  # Extract user_id
-    print(f"Received user_id: {user_id}")  # Debugging line
+    data = await request.json()
+    user_id = data.get("user_id")
+    print(f"Received user_id: {user_id}")
 
     if not user_id:
         raise HTTPException(status_code=400, detail="User ID is required")
 
-    user_id = int(user_id)  # Convert to integer
-    print(f"User ID converted to integer: {user_id}")  # Debugging line
+    user_id = int(user_id)
+    print(f"User ID converted to integer: {user_id}")
 
     cursor.execute("SELECT owner_id FROM cards WHERE id = ?", (card_id,))
     card = cursor.fetchone()
@@ -221,12 +230,11 @@ async def delete_card(card_id: int, request: Request):
         raise HTTPException(status_code=404, detail="Card not found")
 
     owner_id = card[0]
-    print(f"Card owner_id: {owner_id}")  # Debugging line
+    print(f"Card owner_id: {owner_id}")
 
     if owner_id != user_id:
         raise HTTPException(status_code=403, detail="You are not the owner and cannot delete this card")
 
-    # Delete the card
     cursor.execute("DELETE FROM cards WHERE id = ?", (card_id,))
     cursor.execute("DELETE FROM card_permissions WHERE card_id = ?", (card_id,))
     conn.commit()
@@ -238,7 +246,6 @@ def get_card(card_id: int):
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
 
-    # Fetch card details
     query = """
         SELECT c.id, c.text, c.color, c.owner_id
         FROM cards c
@@ -256,7 +263,7 @@ def get_card(card_id: int):
         "id": card[0],
         "text": card[1],
         "color": card[2],
-        "owner_id": card[3],  # ✅ Ensure this is included
+        "owner_id": card[3],
     }
     
     conn.close()
@@ -267,13 +274,11 @@ def update_card(card_id: int, text: str = Body(...), color: str = Body(...)):
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
 
-    # Check if the card exists
     cursor.execute("SELECT id FROM cards WHERE id = ?", (card_id,))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Card not found")
 
-    # Update the card
     cursor.execute("UPDATE cards SET text = ?, color = ? WHERE id = ?", (text, color, card_id))
     conn.commit()
     conn.close()

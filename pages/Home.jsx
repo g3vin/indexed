@@ -17,6 +17,8 @@ export default function Home({ userId: propUserId }) {
     }
 
     const [cards, setCards] = useState([]);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [filterMode, setFilterMode] = useState("both"); // "self", "shared", or "both"
 
     useEffect(() => {
         const fetchCards = async () => {
@@ -43,19 +45,52 @@ export default function Home({ userId: propUserId }) {
         }
     };
 
-
     const handleDeleteCard = (deletedCardId) => {
         setCards((prevCards) => prevCards.filter(card => card.id !== deletedCardId));
+    };
+
+    const filteredCards = cards.filter((card) => {
+        const lowerCaseQuery = searchQuery.toLowerCase();
+        const matchesSearch =
+            card.text.toLowerCase().includes(lowerCaseQuery) ||
+            card.username?.toLowerCase().includes(lowerCaseQuery); // Assuming `username` is a field in the card data
+        const matchesFilterMode =
+            filterMode === "both" ||
+            (filterMode === "self" && card.permission === "owner") ||
+            (filterMode === "shared" && card.permission !== "owner");
+
+        return matchesSearch && matchesFilterMode;
+    });
+
+    const handleToggleFilterMode = () => {
+        setFilterMode((prevMode) =>
+            prevMode === "both" ? "self" : prevMode === "self" ? "shared" : "both"
+        );
     };
 
     return (
         <div className="home">
             <h1>Cards</h1>
+            <div className="controls">
+                <input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <button onClick={handleToggleFilterMode}>
+                    {filterMode === "both"
+                        ? "All Cards"
+                        : filterMode === "self"
+                        ? "Your Cards"
+                        : "Shared Cards"}
+                </button>
+            </div>
             <button onClick={handleCreateCard}>
                 + New Card
             </button>
             <CardGrid 
-                cards={cards} 
+                cards={filteredCards} 
                 userId={parsedUserId} 
                 onDelete={handleDeleteCard}
             />
