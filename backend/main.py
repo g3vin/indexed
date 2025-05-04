@@ -36,39 +36,36 @@ app.add_middleware(
 
 manager = ConnectionManager()
 
+#websocket connection manager
 @app.websocket("/ws/card/{card_id}")
 async def websocket_endpoint(websocket: WebSocket, card_id: int, db: Session = Depends(get_db)):
     await manager.connect(websocket, card_id)
-    print(f"Client connected to card {card_id}")  # Debugging line
     try:
         while True:
             data = await websocket.receive_text()
-            print(f"Received data: {data}")  # Debugging line
             
             try:
                 payload = json.loads(data)
                 text = payload.get("text")
                 color = payload.get("color")
 
-                # Update the card in DB
                 card = db.query(Card).filter(Card.id == card_id).first()
                 if card:
                     card.text = text
                     card.color = color
                     db.commit()
-                    print(f"Card updated in DB: text={text}, color={color}")  # Debugging line
                 else:
-                    print(f"Card with id {card_id} not found in DB.")  # Debugging line
+                    print(f"Card with id {card_id} not found in DB.")
 
                 # Broadcast to others
                 await manager.broadcast(card_id, data)
-                print(f"Broadcasted update to card {card_id}: {data}")  # Debugging line
+                #print(f"Broadcasted update to card {card_id}: {data}")
             except Exception as e:
-                print(f"Failed to process message: {e}")  # Debugging line
+                print(f"Failed to process message: {e}")
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, card_id)
-        print(f"Client disconnected from card {card_id}")  # Debugging line
+        #print(f"Client disconnected from card {card_id}")
 
 
 class CardCreate(BaseModel):
@@ -77,7 +74,7 @@ class CardCreate(BaseModel):
     color: str = "#ffffff"
     
 
-
+#creates a new card
 @app.post("/cards/")
 def create_card(card: CardCreate, db: Session = Depends(get_db)):
     stmt_card = text("""
@@ -124,6 +121,7 @@ def create_jwt_token(username: str) -> str:
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
+#register endpoint
 @app.post("/register/")
 def register(user: UserRegister, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == user.username).first():
@@ -139,6 +137,7 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
 
     return {"message": "User created successfully"}
 
+#login endpoint uses no raw sql, just ORM
 @app.post("/login/")
 def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.username == user.username).first()
@@ -148,6 +147,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     token = create_jwt_token(user.username)
     return {"token": token, "userId": db_user.id}
 
+#gets the list of cards for a user
 @app.get("/users/{user_id}/cards/")
 def get_user_cards(user_id: int, db: Session = Depends(get_db)):
     stmt = text("""
@@ -158,6 +158,7 @@ def get_user_cards(user_id: int, db: Session = Depends(get_db)):
     results = db.execute(stmt, {"user_id": user_id}).fetchall()
     return [{"id": row.id, "text": row.text, "color": row.color} for row in results]
 
+#shares the card with another user
 @app.post("/cards/{card_id}/share/")
 def share_card(card_id: int, share_data: dict, db: Session = Depends(get_db)):
     username = share_data.get("username")
@@ -176,6 +177,7 @@ def share_card(card_id: int, share_data: dict, db: Session = Depends(get_db)):
 
     return {"message": "Card shared successfully", "permission": permission}
 
+#deletes the card
 @app.delete("/cards/{card_id}/")
 def delete_card(card_id: int, user_id: int, db: Session = Depends(get_db)):
     db_card = db.query(Card).filter(Card.id == card_id).first()
@@ -191,6 +193,7 @@ def delete_card(card_id: int, user_id: int, db: Session = Depends(get_db)):
 
     return {"message": "Card deleted successfully"}
 
+#pulls the card details
 @app.get("/cards/{card_id}/")
 def get_card(card_id: int, user_id: int, db: Session = Depends(get_db)):
     # Fetch card details
@@ -223,6 +226,7 @@ class CardUpdate(BaseModel):
     text: str
     color: str
 
+#updates the card
 @app.put("/cards/{card_id}/")
 def update_card(card_id: int, update: CardUpdate, db: Session = Depends(get_db)):
     stmt = text("""

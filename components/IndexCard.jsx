@@ -32,21 +32,19 @@ function IndexCard({ cardId, userId, onDelete }) {
     
                 // Set up WebSocket connection
                 socket = new WebSocket(`ws://127.0.0.1:8000/ws/card/${cardId}`);
-                console.log(`WebSocket connected for card ${cardId}`);  // Debugging line
     
                 socket.onmessage = (event) => {
                     const message = JSON.parse(event.data);
-                    console.log(`Received message: ${event.data}`);  // Debugging line
                     setText(message.text);
                     setColor(message.color);
                 };
     
                 socket.onclose = () => {
-                    console.log("WebSocket closed");  // Debugging line
+                    //console.log("WebSocket closed");
                 };
     
                 socket.onerror = (err) => {
-                    console.error("WebSocket error:", err);  // Debugging line
+                    console.error("WebSocket error:", err);
                 };
     
                 wsRef.current = socket;
@@ -60,7 +58,7 @@ function IndexCard({ cardId, userId, onDelete }) {
         return () => {
             if (socket) {
                 socket.close();
-                console.log(`WebSocket closed for card ${cardId}`);  // Debugging line
+                //console.log(`WebSocket closed for card ${cardId}`);
             }
         };
     }, [cardId, userId]);
@@ -73,7 +71,7 @@ function IndexCard({ cardId, userId, onDelete }) {
       
         try {
           const message = JSON.stringify({ text: newText, color: newColor });
-          console.log("Sending update:", message);
+          //console.log("Sending update:", message);
       
           if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(message);
