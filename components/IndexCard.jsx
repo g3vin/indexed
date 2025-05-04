@@ -21,7 +21,10 @@ function IndexCard({ cardId, userId, onDelete }) {
     
         const fetchCard = async () => {
             try {
-                const response = await axios.get(`http://127.0.0.1:8000/cards/${cardId}/`);
+                const response = await axios.get(`http://127.0.0.1:8000/cards/${cardId}/`, {
+                    params: { user_id: userId }
+                });
+                
                 setText(response.data.text);
                 setColor(response.data.color);
                 setIsOwner(response.data.owner_id === userId);

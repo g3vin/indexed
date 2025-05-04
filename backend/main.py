@@ -192,11 +192,31 @@ def delete_card(card_id: int, user_id: int, db: Session = Depends(get_db)):
     return {"message": "Card deleted successfully"}
 
 @app.get("/cards/{card_id}/")
-def get_card(card_id: int, db: Session = Depends(get_db)):
+def get_card(card_id: int, user_id: int, db: Session = Depends(get_db)):
+    # Fetch card details
     stmt = text("SELECT * FROM cards WHERE id = :card_id")
     row = db.execute(stmt, {"card_id": card_id}).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Card not found")
+
+    # Fetch user-specific permission
+    perm_stmt = text("""
+        SELECT permission FROM card_permissions
+        WHERE card_id = :card_id AND user_id = :user_id
+    """)
+    perm_row = db.execute(perm_stmt, {"card_id": card_id, "user_id": user_id}).fetchone()
+
+    if not perm_row:
+        raise HTTPException(status_code=403, detail="You do not have access to this card")
+
+    return {
+        "id": row.id,
+        "text": row.text,
+        "color": row.color,
+        "owner_id": row.owner_id,
+        "user_permission": perm_row.permission
+    }
+
 
     return {"id": row.id, "text": row.text, "color": row.color, "owner_id": row.owner_id}
 class CardUpdate(BaseModel):
