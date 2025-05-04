@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import CardGrid from "../components/CardGrid";
-import { createCard, getUserCards } from "../api";
+import { createCard, getUserCards, deleteCard } from "../api";
 import "../styles/Home.css";
 
 export default function Home({ userId: propUserId }) {
@@ -18,7 +18,7 @@ export default function Home({ userId: propUserId }) {
 
     const [cards, setCards] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [filterMode, setFilterMode] = useState("both"); // "self", "shared", or "both"
+    const [filterMode, setFilterMode] = useState("both");
 
     useEffect(() => {
         const fetchCards = async () => {
@@ -45,15 +45,21 @@ export default function Home({ userId: propUserId }) {
         }
     };
 
-    const handleDeleteCard = (deletedCardId) => {
-        setCards((prevCards) => prevCards.filter(card => card.id !== deletedCardId));
+    const handleDeleteCard = async (deletedCardId) => {
+        try {
+            await deleteCard(deletedCardId, parsedUserId);
+            setCards((prevCards) => prevCards.filter(card => card.id !== deletedCardId));
+        } catch (error) {
+            console.error("Failed to delete card:", error);
+        }
     };
+    
 
     const filteredCards = cards.filter((card) => {
         const lowerCaseQuery = searchQuery.toLowerCase();
         const matchesSearch =
             card.text.toLowerCase().includes(lowerCaseQuery) ||
-            card.username?.toLowerCase().includes(lowerCaseQuery); // Assuming `username` is a field in the card data
+            card.username?.toLowerCase().includes(lowerCaseQuery);
         const matchesFilterMode =
             filterMode === "both" ||
             (filterMode === "self" && card.permission === "owner") ||

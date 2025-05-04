@@ -26,7 +26,6 @@ function Register() {
             const err = error.response?.data?.detail;
             let errorMessage = "Registration failed.";
             if (Array.isArray(err)) {
-                // Extract the message from each error object
                 errorMessage = err.map(item => item.msg).join(" ");
             } else if (typeof err === "string") {
                 errorMessage = err;

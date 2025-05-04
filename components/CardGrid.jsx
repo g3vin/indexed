@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import IndexCard from "./IndexCard";
 import "../styles/CardGrid.css";
 

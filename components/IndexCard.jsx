@@ -11,11 +11,14 @@ function IndexCard({ cardId, userId, onDelete }) {
     const [sharePermission, setSharePermission] = useState("view");
     const [isOwner, setIsOwner] = useState(false);
     const [userPermission, setUserPermission] = useState("view");
-    
+
     const textareaRef = useRef(null);
     const cardRef = useRef(null);
+    const wsRef = useRef(null); // WebSocket reference
 
     useEffect(() => {
+        let socket;
+    
         const fetchCard = async () => {
             try {
                 const response = await axios.get(`http://127.0.0.1:8000/cards/${cardId}/`);
@@ -23,38 +26,82 @@ function IndexCard({ cardId, userId, onDelete }) {
                 setColor(response.data.color);
                 setIsOwner(response.data.owner_id === userId);
                 setUserPermission(response.data.user_permission || "view");
+    
+                // Set up WebSocket connection
+                socket = new WebSocket(`ws://127.0.0.1:8000/ws/card/${cardId}`);
+                console.log(`WebSocket connected for card ${cardId}`);  // Debugging line
+    
+                socket.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    console.log(`Received message: ${event.data}`);  // Debugging line
+                    setText(message.text);
+                    setColor(message.color);
+                };
+    
+                socket.onclose = () => {
+                    console.log("WebSocket closed");  // Debugging line
+                };
+    
+                socket.onerror = (err) => {
+                    console.error("WebSocket error:", err);  // Debugging line
+                };
+    
+                wsRef.current = socket;
             } catch (error) {
                 console.error("Error fetching card:", error);
             }
         };
+    
         fetchCard();
+    
+        return () => {
+            if (socket) {
+                socket.close();
+                console.log(`WebSocket closed for card ${cardId}`);  // Debugging line
+            }
+        };
     }, [cardId, userId]);
+    
+    const handleUpdate = async (newText, newColor) => {
+        if (userPermission !== "edit" && !isOwner) return;
+      
+        setText(newText);
+        setColor(newColor);
+      
+        try {
+          const message = JSON.stringify({ text: newText, color: newColor });
+          console.log("Sending update:", message);
+      
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(message);
+          }
+      
+          await updateCard(cardId, newText, newColor);
+        } catch (error) {
+          console.error("Error updating card:", error);
+        }
+      };
+      
+    
+    
+    
 
     useEffect(() => {
         if (isExpanded && textareaRef.current && cardRef.current) {
             textareaRef.current.style.height = "auto";
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    
+
             const newHeight = textareaRef.current.scrollHeight + 0;
-            const maxHeight = window.innerHeight * 0.8; // Stops at 80% of screen height
-    
+            const maxHeight = window.innerHeight * 0.8;
+
             cardRef.current.style.height = `${Math.min(newHeight, maxHeight)}px`;
         } else {
             if (cardRef.current) {
-                cardRef.current.style.height = "170px"; // Reset when collapsed
+                cardRef.current.style.height = "170px";
             }
         }
     }, [text, isExpanded]);
-    
 
-    const handleUpdate = async () => {
-        if (userPermission !== "edit" && !isOwner) return;
-        try {
-            await updateCard(cardId, text, color);
-        } catch (error) {
-            console.error("Error updating card:", error);
-        }
-    };
 
     return (
         <>
@@ -75,12 +122,24 @@ function IndexCard({ cardId, userId, onDelete }) {
                                 value={shareUser}
                                 onChange={(e) => setShareUser(e.target.value)}
                             />
-                            <select value={sharePermission} onChange={(e) => setSharePermission(e.target.value)}>
+                            <select
+                                value={sharePermission}
+                                onChange={(e) => setSharePermission(e.target.value)}
+                            >
                                 <option value="view">View</option>
                                 <option value="edit">Edit</option>
                             </select>
-                            <button className="share-button" onClick={handleUpdate}>Share</button>
-                            <button className="delete-button" onClick={() => onDelete(cardId)}>Delete</button>
+                            <button
+                                className="share-button"
+                                onClick={() =>
+                                    shareCard(cardId, shareUser, sharePermission)
+                                }
+                            >
+                                Share
+                            </button>
+                            <button className="delete-button" onClick={() => onDelete(cardId)}>
+                                Delete
+                            </button>
                         </div>
 
                         <div
@@ -88,13 +147,12 @@ function IndexCard({ cardId, userId, onDelete }) {
                             className="index-card expanded"
                             style={{ backgroundColor: color }}
                         >
-                            <textarea
-                                ref={textareaRef}
-                                value={text}
-                                onChange={(e) => setText(e.target.value)}
-                                onBlur={handleUpdate}
-                                readOnly={userPermission === "view" && !isOwner}
-                            />
+<textarea
+  value={text || ""} // always provide a fallback
+  onChange={(e) => handleUpdate(e.target.value, color)}
+/>
+
+
                         </div>
                     </div>
                 </div>
@@ -110,7 +168,7 @@ function IndexCard({ cardId, userId, onDelete }) {
                     <textarea
                         ref={textareaRef}
                         value={text}
-                        onChange={(e) => setText(e.target.value)}
+                        onChange={(e) => handleUpdate(e.target.value, color)}
                         onBlur={handleUpdate}
                         readOnly={userPermission === "view" && !isOwner}
                     />

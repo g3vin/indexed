@@ -1,108 +1,104 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
-import sqlite3
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from .db import get_db
+from .models import User, Card, CardPermission
 import bcrypt
 import jwt
 import datetime
-from fastapi import Request
-from fastapi import Body
 from typing import List
+
+from fastapi import WebSocket, WebSocketDisconnect, Depends
+from sqlalchemy.orm import Session
+from .db import get_db
+from .models import Card
+from .websockets import ConnectionManager
+import json
 
 SECRET_KEY = "your_secret_key"
 
 app = FastAPI()
 
-active_connections: List[WebSocket] = []
-
-@app.websocket("/ws/card/{card_id}")
-async def websocket_endpoint(websocket: WebSocket, card_id: int):
-    await websocket.accept()
-    active_connections.append(websocket)
-    
-    try:
-        while True:
-            data = await websocket.receive_text()
-
-            for connection in active_connections:
-                await connection.send_text(f"Card {card_id} updated: {data}")
-    except WebSocketDisconnect:
-        active_connections.remove(websocket)
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-conn = sqlite3.connect("database.db", check_same_thread=False)
-cursor = conn.cursor()
+manager = ConnectionManager()
 
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        firstName TEXT NOT NULL,
-        lastName TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL
-    )
-""")
-conn.commit()
+@app.websocket("/ws/card/{card_id}")
+async def websocket_endpoint(websocket: WebSocket, card_id: int, db: Session = Depends(get_db)):
+    await manager.connect(websocket, card_id)
+    print(f"Client connected to card {card_id}")  # Debugging line
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print(f"Received data: {data}")  # Debugging line
+            
+            try:
+                payload = json.loads(data)
+                text = payload.get("text")
+                color = payload.get("color")
 
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS cards (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        text TEXT NOT NULL DEFAULT 'New Card',
-        color TEXT NOT NULL DEFAULT '#ffffff'  -- Ensure correct format
-    )
-""")
-conn.commit()
+                # Update the card in DB
+                card = db.query(Card).filter(Card.id == card_id).first()
+                if card:
+                    card.text = text
+                    card.color = color
+                    db.commit()
+                    print(f"Card updated in DB: text={text}, color={color}")  # Debugging line
+                else:
+                    print(f"Card with id {card_id} not found in DB.")  # Debugging line
 
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS card_permissions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        card_id INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
-        permission TEXT NOT NULL, -- allowed values: 'view', 'edit', 'owner'
-        UNIQUE(card_id, user_id),
-        FOREIGN KEY (card_id) REFERENCES cards (id),
-        FOREIGN KEY (user_id) REFERENCES users (id)
-    )
-""")
-conn.commit()
+                # Broadcast to others
+                await manager.broadcast(card_id, data)
+                print(f"Broadcasted update to card {card_id}: {data}")  # Debugging line
+            except Exception as e:
+                print(f"Failed to process message: {e}")  # Debugging line
+
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, card_id)
+        print(f"Client disconnected from card {card_id}")  # Debugging line
+
 
 class CardCreate(BaseModel):
     owner_id: int
     text: str = "New Card"
     color: str = "#ffffff"
+    
+
 
 @app.post("/cards/")
-def create_card(card: CardCreate):
-    try:
-        cursor.execute(
-            "INSERT INTO cards (owner_id, text, color) VALUES (?, ?, ?)",
-            (card.owner_id, card.text, card.color),
-        )
-        conn.commit()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error inserting card: {e}")
+def create_card(card: CardCreate, db: Session = Depends(get_db)):
+    stmt_card = text("""
+        INSERT INTO cards (owner_id, text, color)
+        VALUES (:owner_id, :text, :color)
+        RETURNING id, text, color
+    """)
+    result = db.execute(stmt_card, {
+        "owner_id": card.owner_id,
+        "text": card.text,
+        "color": card.color
+    }).fetchone()
 
-    card_id = cursor.lastrowid
+    stmt_perm = text("""
+        INSERT INTO card_permissions (card_id, user_id, permission)
+        VALUES (:card_id, :user_id, 'owner')
+    """)
+    db.execute(stmt_perm, {"card_id": result.id, "user_id": card.owner_id})
+    db.commit()
 
-    try:
-        cursor.execute(
-            "INSERT INTO card_permissions (card_id, user_id, permission) VALUES (?, ?, ?)",
-            (card_id, card.owner_id, "owner"),
-        )
-        conn.commit()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error inserting card permission: {e}")
-
-    return {"id": card_id, "text": card.text, "color": card.color, "permission": "owner"}
+    return {"id": result.id, "text": result.text, "color": result.color, "permission": "owner"}
 
 class UserRegister(BaseModel):
     username: str
@@ -111,19 +107,15 @@ class UserRegister(BaseModel):
     lastName: str
     email: EmailStr
 
-
 class UserLogin(BaseModel):
     username: str
     password: str
 
-
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
-
 
 def create_jwt_token(username: str) -> str:
     payload = {
@@ -132,155 +124,91 @@ def create_jwt_token(username: str) -> str:
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
-
 @app.post("/register/")
-def register(user: UserRegister):
-    cursor.execute("SELECT * FROM users WHERE username = ?", (user.username,))
-    if cursor.fetchone():
+def register(user: UserRegister, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    cursor.execute("SELECT * FROM users WHERE email = ?", (user.email,))
-    if cursor.fetchone():
+    if db.query(User).filter(User.email == user.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
 
     hashed_pw = hash_password(user.password)
-    cursor.execute(
-        "INSERT INTO users (username, password, firstName, lastName, email) VALUES (?, ?, ?, ?, ?)",
-        (user.username, hashed_pw, user.firstName, user.lastName, user.email)
-    )
-    conn.commit()
+    db_user = User(username=user.username, password=hashed_pw, firstName=user.firstName, lastName=user.lastName, email=user.email)
+    db.add(db_user)
+    db.commit()
+
     return {"message": "User created successfully"}
 
-
 @app.post("/login/")
-def login(user: UserLogin):
-    cursor.execute("SELECT id, password FROM users WHERE username = ?", (user.username,))
-    record = cursor.fetchone()
-
-    if not record or not verify_password(user.password, record[1]):
+def login(user: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.username == user.username).first()
+    if not db_user or not verify_password(user.password, db_user.password):
         raise HTTPException(status_code=400, detail="Invalid username or password")
     
-    user_id = record[0]
     token = create_jwt_token(user.username)
-    return {"token": token, "userId": user_id}
-
-
+    return {"token": token, "userId": db_user.id}
 
 @app.get("/users/{user_id}/cards/")
-def get_user_cards(user_id: int):
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-
-    query = """
-        SELECT c.id, c.text, c.color, cp.permission
-        FROM cards c
-        JOIN card_permissions cp ON c.id = cp.card_id
-        WHERE cp.user_id = ?
-    """
-    cursor.execute(query, (user_id,))
-    cards = [
-        {"id": row[0], "text": row[1], "color": row[2], "permission": row[3]}
-        for row in cursor.fetchall()
-    ]
-
-    conn.close()
-    return cards
-
-
+def get_user_cards(user_id: int, db: Session = Depends(get_db)):
+    stmt = text("""
+        SELECT cards.id, cards.text, cards.color FROM cards
+        INNER JOIN card_permissions ON cards.id = card_permissions.card_id
+        WHERE card_permissions.user_id = :user_id
+    """)
+    results = db.execute(stmt, {"user_id": user_id}).fetchall()
+    return [{"id": row.id, "text": row.text, "color": row.color} for row in results]
 
 @app.post("/cards/{card_id}/share/")
-def share_card(card_id: int, share_data: dict):
+def share_card(card_id: int, share_data: dict, db: Session = Depends(get_db)):
     username = share_data.get("username")
     permission = share_data.get("permission", "view")
 
-    cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
-    user = cursor.fetchone()
-    if not user:
+    db_user = db.query(User).filter(User.username == username).first()
+    if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user_id = user[0]
-
-    try:
-        cursor.execute(
-            "INSERT INTO card_permissions (card_id, user_id, permission) VALUES (?, ?, ?)",
-            (card_id, user_id, permission)
-        )
-        conn.commit()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error sharing card: {e}")
+    stmt = text("""
+        INSERT INTO card_permissions (card_id, user_id, permission)
+        VALUES (:card_id, :user_id, :permission)
+    """)
+    db.execute(stmt, {"card_id": card_id, "user_id": db_user.id, "permission": permission})
+    db.commit()
 
     return {"message": "Card shared successfully", "permission": permission}
 
 @app.delete("/cards/{card_id}/")
-async def delete_card(card_id: int, request: Request):
-    data = await request.json()
-    user_id = data.get("user_id")
-    print(f"Received user_id: {user_id}")
-
-    if not user_id:
-        raise HTTPException(status_code=400, detail="User ID is required")
-
-    user_id = int(user_id)
-    print(f"User ID converted to integer: {user_id}")
-
-    cursor.execute("SELECT owner_id FROM cards WHERE id = ?", (card_id,))
-    card = cursor.fetchone()
-
-    if not card:
+def delete_card(card_id: int, user_id: int, db: Session = Depends(get_db)):
+    db_card = db.query(Card).filter(Card.id == card_id).first()
+    if not db_card:
         raise HTTPException(status_code=404, detail="Card not found")
 
-    owner_id = card[0]
-    print(f"Card owner_id: {owner_id}")
-
-    if owner_id != user_id:
+    if db_card.owner_id != user_id:
         raise HTTPException(status_code=403, detail="You are not the owner and cannot delete this card")
 
-    cursor.execute("DELETE FROM cards WHERE id = ?", (card_id,))
-    cursor.execute("DELETE FROM card_permissions WHERE card_id = ?", (card_id,))
-    conn.commit()
+    db.execute(text("DELETE FROM card_permissions WHERE card_id = :card_id"), {"card_id": card_id})
+    db.execute(text("DELETE FROM cards WHERE id = :card_id"), {"card_id": card_id})
+    db.commit()
 
     return {"message": "Card deleted successfully"}
 
 @app.get("/cards/{card_id}/")
-def get_card(card_id: int):
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-
-    query = """
-        SELECT c.id, c.text, c.color, c.owner_id
-        FROM cards c
-        WHERE c.id = ?
-    """
-    cursor.execute(query, (card_id,))
-    card = cursor.fetchone()
-    
-    if not card:
-        conn.close()
+def get_card(card_id: int, db: Session = Depends(get_db)):
+    stmt = text("SELECT * FROM cards WHERE id = :card_id")
+    row = db.execute(stmt, {"card_id": card_id}).fetchone()
+    if not row:
         raise HTTPException(status_code=404, detail="Card not found")
 
-    # Return ownership information
-    card_data = {
-        "id": card[0],
-        "text": card[1],
-        "color": card[2],
-        "owner_id": card[3],
-    }
-    
-    conn.close()
-    return card_data
+    return {"id": row.id, "text": row.text, "color": row.color, "owner_id": row.owner_id}
+class CardUpdate(BaseModel):
+    text: str
+    color: str
 
 @app.put("/cards/{card_id}/")
-def update_card(card_id: int, text: str = Body(...), color: str = Body(...)):
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT id FROM cards WHERE id = ?", (card_id,))
-    if not cursor.fetchone():
-        conn.close()
-        raise HTTPException(status_code=404, detail="Card not found")
-
-    cursor.execute("UPDATE cards SET text = ?, color = ? WHERE id = ?", (text, color, card_id))
-    conn.commit()
-    conn.close()
-
+def update_card(card_id: int, update: CardUpdate, db: Session = Depends(get_db)):
+    stmt = text("""
+        UPDATE cards SET text = :text, color = :color WHERE id = :card_id
+    """)
+    result = db.execute(stmt, {"text": update.text, "color": update.color, "card_id": card_id})
+    db.commit()
     return {"message": "Card updated successfully"}
+
