@@ -113,7 +113,7 @@ function IndexCard({ cardId, userId, onDelete }) {
                                 type="color"
                                 value={color}
                                 onChange={(e) => setColor(e.target.value)}
-                                onBlur={handleUpdate}
+                                onBlur={() => handleUpdate(text, color)}
                                 disabled={userPermission === "view" && !isOwner}
                             />
                             <input
@@ -147,11 +147,12 @@ function IndexCard({ cardId, userId, onDelete }) {
                             className="index-card expanded"
                             style={{ backgroundColor: color }}
                         >
-<textarea
-  value={text || ""} // always provide a fallback
-  onChange={(e) => handleUpdate(e.target.value, color)}
-/>
-
+                        <textarea
+                            value={text}
+                            onChange={e => handleUpdate(e.target.value, color)}
+                            onBlur={() => handleUpdate(text, color)}
+                            disabled={userPermission === "view" && !isOwner}
+                        />
 
                         </div>
                     </div>
@@ -166,11 +167,10 @@ function IndexCard({ cardId, userId, onDelete }) {
                     onClick={() => setIsExpanded(true)}
                 >
                     <textarea
-                        ref={textareaRef}
                         value={text}
-                        onChange={(e) => handleUpdate(e.target.value, color)}
-                        onBlur={handleUpdate}
-                        readOnly={userPermission === "view" && !isOwner}
+                         onChange={e => handleUpdate(e.target.value, color)}
+                        onBlur={() => handleUpdate(text, color)}
+                        disabled={userPermission === "view" && !isOwner}
                     />
                 </div>
             )}
