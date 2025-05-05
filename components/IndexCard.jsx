@@ -21,7 +21,7 @@ function IndexCard({ cardId, userId, onDelete }) {
     
         const fetchCard = async () => {
             try {
-                const response = await axios.get(`http://127.0.0.1:8000/cards/${cardId}/`, {
+                const response = await axios.get(`https://indexed.onrender.com/cards/${cardId}/`, {
                     params: { user_id: userId }
                 });
                 
