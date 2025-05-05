@@ -6,3 +6,4 @@ bcrypt==4.1.2  # ← Add this to fix your error
 python-multipart==0.0.9  # if you're handling form uploads
 aiofiles==23.2.1
 PyJWT==2.6.0
+pydantic[email]
