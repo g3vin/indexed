@@ -25,7 +25,7 @@ SECRET_KEY = "your_secret_key"
 app = FastAPI()
 
 origins = [
-    "https://indexed-1.onrender.com",
+    "https://indexed.onrender.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]

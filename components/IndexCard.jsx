@@ -14,7 +14,7 @@ function IndexCard({ cardId, userId, onDelete }) {
 
     const textareaRef = useRef(null);
     const cardRef = useRef(null);
-    const wsRef = useRef(null); // WebSocket reference
+    const wsRef = useRef(null);
 
     useEffect(() => {
         let socket;
@@ -30,8 +30,7 @@ function IndexCard({ cardId, userId, onDelete }) {
                 setIsOwner(response.data.owner_id === userId);
                 setUserPermission(response.data.user_permission || "view");
     
-                // Set up WebSocket connection
-                socket = new WebSocket(`ws://127.0.0.1:8000/ws/card/${cardId}`);
+                socket = new WebSocket(`ws://indexed.onrender.com/ws/card/${cardId}`);
     
                 socket.onmessage = (event) => {
                     const message = JSON.parse(event.data);
