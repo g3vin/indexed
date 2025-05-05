@@ -16,6 +16,9 @@ from .db import get_db
 from .models import Card
 from .websockets import ConnectionManager
 import json
+import os
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 SECRET_KEY = "your_secret_key"
 
@@ -236,3 +239,12 @@ def update_card(card_id: int, update: CardUpdate, db: Session = Depends(get_db))
     db.commit()
     return {"message": "Card updated successfully"}
 
+from fastapi.responses import FileResponse
+
+@app.get("/", include_in_schema=False)
+async def serve_root():
+    return FileResponse("index.html")
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa(full_path: str):
+    return FileResponse("index.html")

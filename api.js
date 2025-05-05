@@ -1,3 +1,4 @@
+// api.js
 import axios from "axios";
 
 const API_URL = "http://127.0.0.1:8000";
@@ -31,14 +32,15 @@ export const shareCard = async (cardId, username, permission = "view") => {
     return response.data;
 };
 
-export async function deleteCard(cardId, userId) {
-    const response = await fetch(`http://localhost:8000/cards/${cardId}/?user_id=${userId}`, {
-        method: "DELETE",
-    });
-
-    if (!response.ok) {
-        throw new Error("Failed to delete card");
+export const deleteCard = async (cardId, userId) => {
+    try {
+        const response = await axios.delete(`${API_URL}/cards/${cardId}/`, {
+            data: { user_id: userId },
+            withCredentials: true,
+        });
+        return response;
+    } catch (error) {
+        console.error("API error deleting card:", error);
+        throw error;
     }
-
-    return await response.json();
-}
+};
