@@ -37,6 +37,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.responses import FileResponse
+
+@app.get("/", include_in_schema=False)
+async def serve_root():
+    return FileResponse("index.html")
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa(full_path: str):
+    return FileResponse("index.html")
+
 manager = ConnectionManager()
 
 #websocket connection manager
@@ -238,13 +248,3 @@ def update_card(card_id: int, update: CardUpdate, db: Session = Depends(get_db))
     result = db.execute(stmt, {"text": update.text, "color": update.color, "card_id": card_id})
     db.commit()
     return {"message": "Card updated successfully"}
-
-from fastapi.responses import FileResponse
-
-@app.get("/", include_in_schema=False)
-async def serve_root():
-    return FileResponse("index.html")
-
-@app.get("/{full_path:path}", include_in_schema=False)
-async def serve_spa(full_path: str):
-    return FileResponse("index.html")
