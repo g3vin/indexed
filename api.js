@@ -1,7 +1,7 @@
 // api.js
 import axios from "axios";
 
-const API_URL = "https://indexed-1.onrender.com";
+const API_URL = "https://indexed.onrender.com";
 
 export const registerUser = async (username, password, firstName, lastName, email) => {
     return await axios.post(`${API_URL}/register/`, { username, password, firstName, lastName, email });
