@@ -4,11 +4,10 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from .db import get_db
-from .models import User, Card, CardPermission
+from .models import User, Card
 import bcrypt
 import jwt
 import datetime
-from typing import List
 
 from fastapi import WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.orm import Session
@@ -18,7 +17,6 @@ from .websockets import ConnectionManager
 import json
 import os
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 
 SECRET_KEY = "your_secret_key"
 
@@ -39,6 +37,8 @@ app.add_middleware(
 )
 
 manager = ConnectionManager()
+
+
 
 #websocket connection manager
 @app.websocket("/ws/card/{card_id}")
@@ -78,6 +78,8 @@ class CardCreate(BaseModel):
     color: str = "#ffffff"
     
 
+
+
 #creates a new card
 @app.post("/cards/")
 def create_card(card: CardCreate, db: Session = Depends(get_db)):
@@ -101,6 +103,8 @@ def create_card(card: CardCreate, db: Session = Depends(get_db)):
 
     return {"id": result.id, "text": result.text, "color": result.color, "permission": "owner"}
 
+
+
 class UserRegister(BaseModel):
     username: str
     password: str
@@ -112,11 +116,17 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+
+
 
 def create_jwt_token(username: str) -> str:
     payload = {
@@ -124,6 +134,9 @@ def create_jwt_token(username: str) -> str:
         "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+
+
 
 #register endpoint
 @app.post("/register/")
@@ -141,6 +154,8 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
 
     return {"message": "User created successfully"}
 
+
+
 #login endpoint uses no raw sql, just ORM
 @app.post("/login/")
 def login(user: UserLogin, db: Session = Depends(get_db)):
@@ -150,6 +165,9 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     
     token = create_jwt_token(user.username)
     return {"token": token, "userId": db_user.id}
+
+
+
 
 #gets the list of cards for a user
 @app.get("/users/{user_id}/cards/")
@@ -161,6 +179,9 @@ def get_user_cards(user_id: int, db: Session = Depends(get_db)):
     """)
     results = db.execute(stmt, {"user_id": user_id}).fetchall()
     return [{"id": row.id, "text": row.text, "color": row.color} for row in results]
+
+
+
 
 #shares the card with another user
 @app.post("/cards/{card_id}/share/")
@@ -180,6 +201,10 @@ def share_card(card_id: int, share_data: dict, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Card shared successfully", "permission": permission}
+
+
+
+
 from fastapi import Query
 #deletes the card
 @app.delete("/cards/{card_id}/")
@@ -197,16 +222,16 @@ def delete_card(card_id: int, user_id: int = Query(...), db: Session = Depends(g
 
     return {"message": "Card deleted successfully"}
 
-#pulls the card details
+
+
+
 @app.get("/cards/{card_id}/")
 def get_card(card_id: int, user_id: int, db: Session = Depends(get_db)):
-    # Fetch card details
     stmt = text("SELECT * FROM cards WHERE id = :card_id")
     row = db.execute(stmt, {"card_id": card_id}).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Card not found")
 
-    # Fetch user-specific permission
     perm_stmt = text("""
         SELECT permission FROM card_permissions
         WHERE card_id = :card_id AND user_id = :user_id
@@ -225,7 +250,7 @@ def get_card(card_id: int, user_id: int, db: Session = Depends(get_db)):
     }
 
 
-    return {"id": row.id, "text": row.text, "color": row.color, "owner_id": row.owner_id}
+ 
 class CardUpdate(BaseModel):
     text: str
     color: str
