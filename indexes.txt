@@ -1,0 +1,48 @@
+users.id
+    Primary Key + Index
+
+    Used in:
+        cards.owner_id - foreign key
+        card_permissions.user_id - foreign key
+        login endpoint
+        get users cards
+        share card
+
+    Justification:
+        Optimizes joins and searches for user data in cards and card_permissions
+
+users.username
+
+    Used In:
+        register - does this username exist?
+        login - search for auth
+        share - identification in search button
+    
+    Justification:
+        We often search by username for login and sharing, so it needs to be fast
+
+users.email
+
+    Used In:
+        Register - to check for duplicate email
+    
+    Justification:
+        fast lookup for email validation uniqueness
+
+cards.id
+
+    Used in:
+        GET Card
+        PUT Card
+        DELETE Card
+        Websocket - for live edits
+
+    Justification:
+        needed for real-time updates and editing and card_permissions
+
+card_permissions.id
+
+    NOT QUERIED
+
+    Justification:
+        used for deletes and edits
