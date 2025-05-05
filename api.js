@@ -35,7 +35,7 @@ export const shareCard = async (cardId, username, permission = "view") => {
 export const deleteCard = async (cardId, userId) => {
     try {
         const response = await axios.delete(`${API_URL}/cards/${cardId}/`, {
-            data: { user_id: userId },
+            params: { user_id: userId },
             withCredentials: true,
         });
         return response;

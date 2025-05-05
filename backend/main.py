@@ -180,10 +180,10 @@ def share_card(card_id: int, share_data: dict, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Card shared successfully", "permission": permission}
-
+from fastapi import Query
 #deletes the card
 @app.delete("/cards/{card_id}/")
-def delete_card(card_id: int, user_id: int, db: Session = Depends(get_db)):
+def delete_card(card_id: int, user_id: int = Query(...), db: Session = Depends(get_db)):
     db_card = db.query(Card).filter(Card.id == card_id).first()
     if not db_card:
         raise HTTPException(status_code=404, detail="Card not found")
