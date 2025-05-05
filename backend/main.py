@@ -248,3 +248,10 @@ def update_card(card_id: int, update: CardUpdate, db: Session = Depends(get_db))
     result = db.execute(stmt, {"text": update.text, "color": update.color, "card_id": card_id})
     db.commit()
     return {"message": "Card updated successfully"}
+
+
+app.mount(
+    "/", 
+    StaticFiles(directory=".", html=True),  # "." = your project root
+    name="spa",
+)
