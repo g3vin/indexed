@@ -250,8 +250,10 @@ def update_card(card_id: int, update: CardUpdate, db: Session = Depends(get_db))
     return {"message": "Card updated successfully"}
 
 
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
 app.mount(
-    "/", 
-    StaticFiles(directory=".", html=True),  # "." = your project root
+    "/",
+    StaticFiles(directory=ROOT, html=True),
     name="spa",
 )
