@@ -30,7 +30,7 @@ function IndexCard({ cardId, userId, onDelete }) {
                 setIsOwner(response.data.owner_id === userId);
                 setUserPermission(response.data.user_permission || "view");
     
-                socket = new WebSocket(`ws://indexed.onrender.com/ws/card/${cardId}`);
+                socket = new WebSocket(`wss://indexed.onrender.com/ws/card/${cardId}`);
     
                 socket.onmessage = (event) => {
                     const message = JSON.parse(event.data);
